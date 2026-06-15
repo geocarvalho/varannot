@@ -56,7 +56,7 @@ def is_available():
 
 
 # Bump when the plotting/track-selection logic changes so old PNGs are redrawn.
-CACHE_VERSION = "v2"
+CACHE_VERSION = "v3"
 
 
 def _cache_path(cache_dir, variant_str, out_name, length_name, zoom, ontology,
@@ -126,6 +126,45 @@ def _filter_tracks(data, idx):
     return data.filter_tracks(mask)
 
 
+def _track_label(data):
+    """Human-readable label for the (already filtered) tracks of ``data``.
+
+    AlphaGenome's raw track ``name`` embeds ontology CURIEs (e.g. UBERON:0000948),
+    which aren't friendly to read. The metadata also carries a ``biosample_name``
+    / ``gtex_tissue`` describing the tissue/cell, plus the assay and TF/histone
+    target, so we build a readable string and keep the CURIE in parentheses.
+    """
+    meta = getattr(data, "metadata", None)
+    if meta is None or len(meta) == 0:
+        return ""
+    row = meta.iloc[0]
+
+    def val(col):
+        try:
+            v = row.get(col)
+        except Exception:
+            return ""
+        if v is None:
+            return ""
+        s = str(v).strip()
+        return "" if s.lower() in ("", "nan", "none") else s
+
+    bio = val("biosample_name") or val("gtex_tissue")
+    target = val("transcription_factor") or val("histone_mark")
+    curie = val("ontology_curie")
+
+    label = bio or val("name")
+    if target and target.lower() not in label.lower():
+        label = f"{target} \u00b7 {label}" if label else target
+    if curie and bio:
+        label = f"{label} ({curie})"
+
+    extra = len(meta) - 1
+    if extra > 0:
+        label = f"{label} +{extra} more"
+    return label
+
+
 def _figure_for_output(plot_components, outputs, variant, out_name, zoom,
                        top_n=DEFAULT_TOP_TRACKS):
     """Build a matplotlib Figure for one output type.
@@ -154,13 +193,14 @@ def _figure_for_output(plot_components, outputs, variant, out_name, zoom,
     annotations = [plot_components.VariantAnnotation([variant], alpha=0.8)]
     base = ref if ref is not None else alt  # at least one is non-None here
 
-    track_name = ""
-    try:
-        names = list(base.names)
-        if names:
-            track_name = str(names[0])
-    except Exception:
-        track_name = ""
+    track_name = _track_label(base)
+    if not track_name:
+        try:
+            names = list(base.names)
+            if names:
+                track_name = str(names[0])
+        except Exception:
+            track_name = ""
 
     if out_name == "CONTACT_MAPS":
         comps = []
@@ -194,7 +234,7 @@ def _figure_for_output(plot_components, outputs, variant, out_name, zoom,
 def run_for_variants(variants_meta, api_key, cache_dir=".varannot_cache",
                      output_types=None, ontology_terms=None,
                      sequence_length=DEFAULT_SEQUENCE_LENGTH, zoom=DEFAULT_ZOOM,
-                     top_n=DEFAULT_TOP_TRACKS):
+                     top_n=DEFAULT_TOP_TRACKS, progress=None):
     """
     Run AlphaGenome for each variant and build per-output plot data URIs.
 
@@ -205,6 +245,8 @@ def run_for_variants(variants_meta, api_key, cache_dir=".varannot_cache",
     output_types  : list of OutputType names (defaults to all)
     ontology_terms: optional list of ontology CURIEs (e.g. ['UBERON:0001157'])
     top_n         : per output, plot only the N most variant-relevant tracks
+    progress      : optional callback ``progress(done, total, label)`` invoked
+                    as each variant starts (for UI progress reporting)
 
     Returns a dict consumed by the template:
       {enabled, error,
@@ -253,6 +295,11 @@ def run_for_variants(variants_meta, api_key, cache_dir=".varannot_cache",
         return result
 
     for i, vm in enumerate(variants_meta):
+        if progress:
+            try:
+                progress(i + 1, len(variants_meta), vm.get("label", ""))
+            except Exception:
+                pass
         chrom = str(vm["chrom"])
         if not chrom.startswith("chr"):
             chrom = "chr" + chrom

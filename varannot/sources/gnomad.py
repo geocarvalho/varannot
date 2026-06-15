@@ -140,6 +140,12 @@ def query_constraint(client, gene_symbol, dataset="gnomad_r4"):
 
     result["found"] = True
     result["gene_id"] = gene.get("gene_id")
+    if result["gene_id"]:
+        result["browser_url"] = (f"https://gnomad.broadinstitute.org/gene/"
+                                 f"{result['gene_id']}?dataset={dataset}")
+    else:
+        result["browser_url"] = (f"https://gnomad.broadinstitute.org/gene/"
+                                 f"{gene_symbol}?dataset={dataset}")
     result["pli"] = constraint.get("pli")
     result["mis_z"] = constraint.get("mis_z")
     result["syn_z"] = constraint.get("syn_z")

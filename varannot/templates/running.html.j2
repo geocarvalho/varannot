@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running &middot; varannot</title>
+<style>
+  :root {
+    --ink: #1a1d24;
+    --ink-soft: #5a6275;
+    --paper: #fbfaf7;
+    --panel: #ffffff;
+    --line: #e3e0d8;
+    --accent: #2b6f6a;
+    --accent-soft: #e6f0ef;
+    --warn: #b5532a;
+    --warn-soft: #f7e9e2;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(20,29,36,0.06); padding: 2.2rem 2.4rem;
+    width: min(540px, 92vw); text-align: center;
+  }
+  .spinner {
+    width: 46px; height: 46px; margin: 0 auto 1.2rem;
+    border: 4px solid var(--accent-soft); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  h1 { font-size: 1.2rem; font-weight: 650; margin: 0 0 0.4rem; }
+  .msg {
+    font-family: var(--mono); font-size: 0.86rem; color: var(--ink-soft);
+    margin: 0.3rem 0 1.2rem; min-height: 1.2em; word-break: break-word;
+  }
+  .bar {
+    height: 9px; background: var(--line); border-radius: 5px; overflow: hidden;
+    margin: 0 auto;
+  }
+  .bar > span {
+    display: block; height: 100%; width: 0%; background: var(--accent);
+    transition: width 0.3s ease;
+  }
+  .bar.indet > span {
+    width: 35% !important; animation: slide 1.2s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0% { margin-left: -35%; } 100% { margin-left: 100%; }
+  }
+  .count { font-size: 0.78rem; color: var(--ink-soft); margin-top: 0.5rem; }
+  .error {
+    background: var(--warn-soft); border: 1px solid var(--warn); color: var(--warn);
+    border-radius: 8px; padding: 0.8rem 1rem; font-size: 0.88rem; text-align: left;
+    margin-top: 0.5rem;
+  }
+  a.back {
+    display: inline-block; margin-top: 1.2rem; color: var(--accent);
+    font-size: 0.85rem; font-weight: 600; text-decoration: none;
+  }
+  a.back:hover { text-decoration: underline; }
+  .hint { font-size: 0.75rem; color: var(--ink-soft); margin-top: 1rem; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div id="spinner" class="spinner"></div>
+    <h1 id="title">Generating report&hellip;</h1>
+    <div class="msg" id="msg">{{ initial.message }}</div>
+    <div class="bar indet" id="bar"><span id="barfill"></span></div>
+    <div class="count" id="count"></div>
+    <div id="errbox"></div>
+    <a class="back" id="back" href="{{ url_for('index') }}" style="display:none">&larr; Start over</a>
+    <div class="hint">Keep this tab open. The report opens here when it's ready.</div>
+  </div>
+
+<script>
+  (function () {
+    var jobId = {{ job_id | tojson }};
+    var msg = document.getElementById('msg');
+    var bar = document.getElementById('bar');
+    var fill = document.getElementById('barfill');
+    var count = document.getElementById('count');
+    var errbox = document.getElementById('errbox');
+    var back = document.getElementById('back');
+    var spinner = document.getElementById('spinner');
+    var title = document.getElementById('title');
+    var stopped = false;
+
+    function fail(text) {
+      stopped = true;
+      spinner.style.display = 'none';
+      bar.style.display = 'none';
+      count.textContent = '';
+      title.textContent = 'Something went wrong';
+      errbox.innerHTML = '<div class="error">' + (text || 'Unknown error') + '</div>';
+      back.style.display = 'inline-block';
+    }
+
+    function tick() {
+      if (stopped) return;
+      fetch('/progress/' + jobId, { cache: 'no-store' })
+        .then(function (r) {
+          if (r.status === 404) { fail('This job is no longer available.'); return null; }
+          return r.json();
+        })
+        .then(function (s) {
+          if (!s || stopped) return;
+          if (s.message) msg.textContent = s.message;
+          if (s.total && s.current) {
+            bar.classList.remove('indet');
+            fill.style.width = Math.round((s.current / s.total) * 100) + '%';
+            count.textContent = s.current + ' / ' + s.total;
+          } else {
+            bar.classList.add('indet');
+            count.textContent = '';
+          }
+          if (s.state === 'done') {
+            stopped = true;
+            title.textContent = 'Done — opening report';
+            fill.style.width = '100%';
+            window.location = '/result/' + jobId;
+            return;
+          }
+          if (s.state === 'error') { fail(s.error); return; }
+          setTimeout(tick, 1000);
+        })
+        .catch(function () { setTimeout(tick, 2000); });  // transient: retry
+    }
+
+    {% if initial.state == 'done' %}
+      window.location = '/result/' + jobId;
+    {% else %}
+      tick();
+    {% endif %}
+  })();
+</script>
+</body>
+</html>

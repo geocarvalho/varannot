@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>varannot &middot; variant annotation</title>
+<style>
+  :root {
+    --ink: #1a1d24;
+    --ink-soft: #5a6275;
+    --paper: #fbfaf7;
+    --panel: #ffffff;
+    --line: #e3e0d8;
+    --accent: #2b6f6a;
+    --accent-soft: #e6f0ef;
+    --warn: #b5532a;
+    --warn-soft: #f7e9e2;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  header.head {
+    padding: 2.4rem 2rem 1.4rem; border-bottom: 2px solid var(--ink);
+  }
+  header.head h1 { font-size: 1.5rem; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  header.head p { margin: 0.4rem 0 0; color: var(--ink-soft); font-size: 0.9rem; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 1.8rem 2rem 4rem; }
+
+  form { display: flex; flex-direction: column; gap: 1.4rem; }
+  fieldset {
+    border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.3rem;
+    background: var(--panel); margin: 0;
+  }
+  legend {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--ink-soft); font-weight: 600; padding: 0 0.4rem;
+  }
+  label.field { display: block; font-size: 0.86rem; font-weight: 600; margin-bottom: 0.35rem; }
+  .hint { font-size: 0.78rem; color: var(--ink-soft); font-weight: 400; margin-top: 0.2rem; }
+
+  .examples { margin-top: 0.8rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .ex-label { font-size: 0.78rem; color: var(--ink-soft); margin-right: 0.15rem; }
+  .chip {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--accent);
+    background: var(--accent-soft); border: 1px solid var(--line);
+    border-radius: 999px; padding: 0.25rem 0.7rem; cursor: pointer;
+  }
+  .chip:hover { background: #d9eae8; }
+  .chip-all { font-family: var(--sans); font-weight: 600; }
+  .chip-clear { font-family: var(--sans); color: var(--ink-soft); background: #fff; }
+  textarea, input[type="text"], input[type="password"], input[type="number"] {
+    width: 100%; font-family: var(--mono); font-size: 0.9rem;
+    border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.7rem;
+    background: #fff; color: var(--ink); resize: vertical;
+  }
+  textarea { min-height: 130px; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .row { margin-bottom: 1rem; }
+  .row:last-child { margin-bottom: 0; }
+  .check { display: flex; align-items: flex-start; gap: 0.55rem; font-size: 0.9rem; margin: 0.5rem 0; }
+  .check input { margin-top: 0.2rem; }
+  .check .desc { color: var(--ink-soft); font-size: 0.8rem; }
+
+  details.adv summary {
+    cursor: pointer; font-size: 0.85rem; color: var(--accent); font-weight: 600;
+    margin-top: 0.4rem;
+  }
+  details.adv > div { margin-top: 0.8rem; }
+
+  .privacy {
+    background: var(--accent-soft); border: 1px solid var(--line);
+    border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.82rem; color: var(--ink);
+  }
+  .privacy strong { color: var(--accent); }
+
+  button.submit {
+    align-self: flex-start; font-family: var(--sans); font-size: 0.95rem;
+    font-weight: 650; color: #fff; background: var(--accent); border: none;
+    border-radius: 8px; padding: 0.7rem 1.5rem; cursor: pointer;
+  }
+  button.submit:hover { filter: brightness(1.06); }
+
+  .error {
+    background: var(--warn-soft); border: 1px solid var(--warn); color: var(--warn);
+    border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.88rem;
+  }
+  .note { font-size: 0.8rem; color: var(--ink-soft); }
+  code { font-family: var(--mono); background: #f0eee8; padding: 0.05rem 0.3rem; border-radius: 4px; }
+  footer { padding: 2rem; text-align: center; color: var(--ink-soft); font-size: 0.76rem; }
+</style>
+</head>
+<body>
+<header class="head">
+  <h1>varannot</h1>
+  <p>Paste variants (GRCh38), get a combined annotation report.</p>
+</header>
+
+<div class="wrap">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/report" autocomplete="off" style="margin-top:1.2rem">
+    <fieldset>
+      <legend>Variants</legend>
+      <label class="field" for="variants">One per line &middot; <code>chr,pos,ref,alt</code></label>
+      <textarea id="variants" name="variants" spellcheck="false"
+                placeholder="{{ example }}">{{ variants_text }}</textarea>
+      <div class="hint">Up to {{ max_variants }} variants. A header row is optional. Tabs also work.</div>
+      {% if examples %}
+      <div class="examples">
+        <span class="ex-label">Try an example:</span>
+        {% for ex in examples %}
+        <button type="button" class="chip" data-variant="{{ ex }}">{{ ex }}</button>
+        {% endfor %}
+        <button type="button" class="chip chip-all" id="ex-all">Load all</button>
+        <button type="button" class="chip chip-clear" id="ex-clear">Clear</button>
+      </div>
+      {% endif %}
+    </fieldset>
+
+    <fieldset>
+      <legend>Options</legend>
+      <label class="check">
+        <input type="checkbox" name="spliceai">
+        <span>SpliceAI splice predictions
+          <span class="desc">Uses the public Broad endpoint (rate limited; adds a few seconds per variant).</span>
+        </span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="conservation46">
+        <span>46-way amino-acid conservation track
+          <span class="desc">Downloads a ~355&nbsp;MB UCSC file once on first use.</span>
+        </span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="run_alphagenome"{% if not ag_installed %} disabled{% endif %}>
+        <span>AlphaGenome predictions (adds a second tab)
+          <span class="desc">
+            {% if ag_installed %}Slow — about a minute per variant. Requires the key below.
+            {% else %}Unavailable: <code>pip install alphagenome matplotlib</code> on the server.{% endif %}
+          </span>
+        </span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>AlphaGenome license key</legend>
+      <div class="privacy">
+        <strong>Not stored.</strong> The key is used only to make this one request and is
+        never saved to disk or logged. Sent over POST (not in the URL).
+      </div>
+
+      <div class="row" style="margin-top:1rem">
+        <label class="field" for="alphagenome_key">AlphaGenome key</label>
+        <input type="password" id="alphagenome_key" name="alphagenome_key"
+               autocomplete="off" placeholder="required only for AlphaGenome predictions">
+      </div>
+
+      <details class="adv">
+        <summary>Advanced AlphaGenome settings</summary>
+        <div class="row">
+          <label class="field" for="alphagenome_outputs">Output types (comma separated)</label>
+          <input type="text" id="alphagenome_outputs" name="alphagenome_outputs"
+                 placeholder="default: all (e.g. RNA_SEQ,DNASE,ATAC,SPLICE_JUNCTIONS)">
+        </div>
+        <div class="row">
+          <label class="field" for="alphagenome_ontology">Ontology CURIEs (comma separated)</label>
+          <input type="text" id="alphagenome_ontology" name="alphagenome_ontology"
+                 placeholder="default: all (e.g. UBERON:0001157,UBERON:0002048)">
+        </div>
+        <div class="row">
+          <label class="field" for="alphagenome_top_tracks">Top tracks per output</label>
+          <input type="number" id="alphagenome_top_tracks" name="alphagenome_top_tracks"
+                 min="1" value="1">
+          <div class="hint">Plots only the N most variant-relevant tracks/tissues.</div>
+        </div>
+      </details>
+    </fieldset>
+
+    <button class="submit" type="submit">Generate report</button>
+    <div class="note">
+      The report opens in this tab. AlphaGenome runs can take a while — leave the tab open.
+    </div>
+  </form>
+</div>
+
+<footer>
+  varannot &middot; research use only; annotations require expert review.
+</footer>
+<script>
+  (function () {
+    var ta = document.getElementById('variants');
+    if (!ta) return;
+
+    function lines() {
+      return ta.value.split('\n').map(function (l) { return l.trim(); })
+               .filter(function (l) { return l; });
+    }
+    function addVariant(v) {
+      var existing = lines();
+      if (existing.indexOf(v) !== -1) return;       // don't duplicate
+      ta.value = existing.concat([v]).join('\n') + '\n';
+      ta.focus();
+    }
+
+    document.querySelectorAll('.chip[data-variant]').forEach(function (btn) {
+      btn.addEventListener('click', function () { addVariant(btn.dataset.variant); });
+    });
+    var all = document.getElementById('ex-all');
+    if (all) all.addEventListener('click', function () {
+      var vals = [];
+      document.querySelectorAll('.chip[data-variant]').forEach(function (b) {
+        vals.push(b.dataset.variant);
+      });
+      ta.value = vals.join('\n') + '\n';
+      ta.focus();
+    });
+    var clear = document.getElementById('ex-clear');
+    if (clear) clear.addEventListener('click', function () { ta.value = ''; ta.focus(); });
+  })();
+</script>
+</body>
+</html>

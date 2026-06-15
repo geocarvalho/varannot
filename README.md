@@ -87,7 +87,44 @@ If you instead have a licensed API key, you can still use `--omim-key` (or the
 An NCBI key (optional, raises ClinVar rate limits) is at
 <https://www.ncbi.nlm.nih.gov/account/>.
 
-## Usage
+## Web UI
+
+Prefer pasting variants in a browser instead of using the CLI? Run the bundled
+web app (needs `pip install flask`):
+
+```bash
+python -m varannot.web                 # http://127.0.0.1:8000
+python -m varannot.web --port 8080 --host 0.0.0.0
+```
+
+> macOS note: port 5000 is used by the AirPlay Receiver and returns
+> `HTTP 403`, so varannot defaults to port 8000. (You can also turn AirPlay
+> Receiver off in System Settings → General → AirDrop & Handoff.)
+
+Paste one variant per line (`chr,pos,ref,alt`), optionally tick SpliceAI /
+conservation / AlphaGenome, and submit. The job runs in the background and a
+**progress page** shows the current step (e.g. "Annotating chr3:… (2/3)" or
+AlphaGenome progress); when it finishes the report opens automatically in the
+same tab. This keeps slow runs (especially AlphaGenome) from looking like a
+hung blank page.
+
+OMIM is read automatically from `data/genemap2.txt` (override with the
+`OMIM_GENEMAP2` env var), and the optional NCBI key is taken from the
+`NCBI_API_KEY` env var — neither is prompted for. The only key field is the
+**AlphaGenome** key, needed solely for AlphaGenome predictions.
+
+**Key handling:** the AlphaGenome key is used **in memory for that one request
+only**. The form posts over POST (it never appears in the URL or server access
+logs), the field is a password input and is never echoed back, and the key is
+never written to disk or logged. The on-disk cache only stores public API
+responses, never the key.
+
+> Security note: `--host 127.0.0.1` (the default) keeps the app on your machine.
+> If you expose it to others (`--host 0.0.0.0` or behind a proxy), put it behind
+> **HTTPS** so pasted keys aren't sent in plaintext, and remember the cache and
+> rate limiter are shared across users.
+
+## CLI usage
 
 Input is a CSV/TSV with `chr,pos,ref,alt` (a header row is optional):
 
@@ -214,6 +251,18 @@ Available output types: `ATAC`, `CAGE`, `DNASE`, `RNA_SEQ`, `CHIP_HISTONE`,
 `CHIP_TF`, `SPLICE_SITES`, `SPLICE_SITE_USAGE`, `SPLICE_JUNCTIONS`,
 `CONTACT_MAPS`, `PROCAP`.
 
+Each plot is labelled with the biosample (tissue / cell type / cell line) the
+track was measured in, e.g. `K562 (CLO:0026258)` or `heart left ventricle
+(UBERON:0000948)`. The code in parentheses is the source **ontology CURIE**:
+
+| Prefix   | Ontology | What it identifies |
+|----------|----------|--------------------|
+| `UBERON` | Uber-anatomy ontology | anatomical structures / tissues (e.g. `UBERON:0000948` = heart) |
+| `CL`     | Cell Ontology | native cell types |
+| `CLO`    | Cell Line Ontology | cultured cell lines (e.g. `CLO:0026258`) |
+| `EFO`    | Experimental Factor Ontology | experimental samples / cell lines |
+| `NTR`    | New Term Requested | provisional terms not yet in an ontology |
+
 Without an ontology filter, AlphaGenome returns hundreds of tracks per output
 (more than its plotter allows). By default the report therefore shows only the
 **single track/tissue where the variant has the largest predicted effect** for
@@ -227,6 +276,7 @@ restrict tissues explicitly with `--alphagenome-ontology`.
 varannot/
 ├── annotate.py            # main CLI orchestrator + HTML rendering
 ├── alphagenome_report.py  # separate CLI for the AlphaGenome report
+├── web.py                 # Flask web UI (paste variants + keys)
 ├── http_client.py         # cached, rate-limited HTTP session
 ├── sources/
 │   ├── vep.py             # HGVS (RefSeq/MANE), consequence, AlphaMissense
@@ -242,6 +292,8 @@ varannot/
 │   └── alphagenome.py     # AlphaGenome predictions + matplotlib plots
 └── templates/
     ├── report.html.j2              # main report (gains tabs when combined)
+    ├── form.html.j2                # web UI input form
+    ├── running.html.j2             # web UI progress/running page
     ├── alphagenome_report.html.j2  # standalone AlphaGenome report
     ├── _ag_styles.html.j2          # shared AlphaGenome CSS (grid + lightbox)
     ├── _ag_panel.html.j2           # shared AlphaGenome plot grid + selector

@@ -45,25 +45,41 @@ from .sources import alphagenome as alphagenome_src
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 
-def parse_variants(path):
-    """Read a CSV/TSV of variants. Accepts comma or tab; skips header if present."""
+def _parse_variant_lines(lines, warn=True):
+    """Parse an iterable of text lines into variant dicts.
+
+    Accepts comma or tab separated ``chr,pos,ref,alt``; blank/`#` lines and a
+    header row (non-numeric position) are skipped.
+    """
     variants = []
-    with open(path, "r", encoding="utf-8") as fh:
-        for raw in fh:
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            sep = "," if "," in line else "\t"
-            parts = [p.strip() for p in line.split(sep)]
-            if len(parts) < 4:
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        sep = "," if "," in line else "\t"
+        parts = [p.strip() for p in line.split(sep)]
+        if len(parts) < 4:
+            if warn:
                 print(f"  WARNING: skipping malformed line: {line}")
-                continue
-            chrom, pos, ref, alt = parts[0], parts[1], parts[2], parts[3]
-            # Skip a header row like "chr,pos,ref,alt"
-            if not pos.isdigit():
-                continue
-            variants.append({"chrom": chrom, "pos": int(pos), "ref": ref.upper(), "alt": alt.upper()})
+            continue
+        chrom, pos, ref, alt = parts[0], parts[1], parts[2], parts[3]
+        # Skip a header row like "chr,pos,ref,alt"
+        if not pos.isdigit():
+            continue
+        variants.append({"chrom": chrom, "pos": int(pos),
+                         "ref": ref.upper(), "alt": alt.upper()})
     return variants
+
+
+def parse_variants(path):
+    """Read a CSV/TSV file of variants. Accepts comma or tab; skips header."""
+    with open(path, "r", encoding="utf-8") as fh:
+        return _parse_variant_lines(fh)
+
+
+def parse_variants_text(text):
+    """Parse variants from a pasted block of text (one variant per line)."""
+    return _parse_variant_lines((text or "").splitlines(), warn=False)
 
 
 def annotate_one(client, var, omim_key, ncbi_key=None,
@@ -129,24 +145,61 @@ def annotate_one(client, var, omim_key, ncbi_key=None,
     }
 
 
-def render_report(records, output_path, alphagenome=None):
-    """Render the combined HTML report.
+def _error_record(var, exc, spliceai_enabled=False):
+    """Build a placeholder record for a variant whose annotation failed."""
+    msg = str(exc)
+    return {
+        "input": var,
+        "vep": {"error": msg},
+        "gnomad": {"found": False, "browser_url": "#", "error": msg},
+        "constraint": {"found": False},
+        "clinvar": {"found": False, "error": msg},
+        "omim": {"found": False, "error": msg},
+        "conservation": {"available": False, "note": msg,
+                         "species": [], "track": "", "human_aa": "",
+                         "n_species": 0, "assembly": "hg19/46way"},
+        "conservation_score": None,
+        "spliceai": {"enabled": spliceai_enabled, "found": False,
+                     "error": msg, "transcripts": [], "max_delta": None,
+                     "web_url": "", "interpretation": ""},
+        "revel": {"found": False, "error": msg, "revel": None,
+                  "cadd_phred": None, "url": "", "interpretation": ""},
+        "gene_model": {"found": False, "svg": "", "caption": "",
+                       "error": msg, "location": None},
+        "protein_diagram": {"found": False, "svg": "", "caption": "",
+                            "error": msg, "domains": [], "length": None},
+        "gtex": {"found": False, "tissues": [], "max_median": 0.0,
+                 "error": msg, "url": ""},
+    }
+
+
+def render_report_str(records, alphagenome=None, web=False):
+    """Render the combined HTML report and return it as a string.
 
     When ``alphagenome`` (the dict from ``alphagenome_src.run_for_variants``) is
     supplied, the report is rendered with two tabs: Annotations + AlphaGenome.
     Otherwise it's the plain single-view annotation report.
+
+    ``web=True`` adds the floating "New variants" / "Download HTML" actions used
+    by the web UI (omitted for the standalone CLI report file).
     """
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
         autoescape=select_autoescape(["html", "xml", "j2"]),
     )
     template = env.get_template("report.html.j2")
-    html = template.render(
+    return template.render(
         variants=records,
         n_variants=len(records),
         generated=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
         alphagenome=alphagenome,
+        web=web,
     )
+
+
+def render_report(records, output_path, alphagenome=None):
+    """Render the combined HTML report to ``output_path``."""
+    html = render_report_str(records, alphagenome=alphagenome)
     with open(output_path, "w", encoding="utf-8") as fh:
         fh.write(html)
 
@@ -254,30 +307,7 @@ def main():
             ))
         except Exception as exc:  # keep going on per-variant failures
             print(f" ERROR: {exc}")
-            records.append({
-                "input": var,
-                "vep": {"error": str(exc)},
-                "gnomad": {"found": False, "browser_url": "#", "error": str(exc)},
-                "constraint": {"found": False},
-                "clinvar": {"found": False, "error": str(exc)},
-                "omim": {"found": False, "error": str(exc)},
-                "conservation": {"available": False, "note": str(exc),
-                                 "species": [], "track": "", "human_aa": "",
-                                 "n_species": 0, "assembly": "hg19/46way"},
-                "conservation_score": None,
-                "spliceai": {"enabled": args.spliceai, "found": False,
-                             "error": str(exc), "transcripts": [], "max_delta": None,
-                             "web_url": "", "interpretation": ""},
-                "revel": {"found": False, "error": str(exc), "revel": None,
-                          "cadd_phred": None, "url": "", "interpretation": ""},
-                "gene_model": {"found": False, "svg": "", "caption": "",
-                               "error": str(exc), "location": None},
-                "protein_diagram": {"found": False, "svg": "", "caption": "",
-                                    "error": str(exc), "domains": [],
-                                    "length": None},
-                "gtex": {"found": False, "tissues": [], "max_median": 0.0,
-                         "error": str(exc), "url": ""},
-            })
+            records.append(_error_record(var, exc, spliceai_enabled=args.spliceai))
 
     # Optional: combined report with an AlphaGenome tab (only when a key is given).
     alphagenome = None
