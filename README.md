@@ -102,7 +102,9 @@ python -m varannot.web --port 8080 --host 0.0.0.0
 > Receiver off in System Settings → General → AirDrop & Handoff.)
 
 Paste one variant per line (`chr,pos,ref,alt`), optionally tick SpliceAI /
-conservation / AlphaGenome, and submit. The job runs in the background and a
+conservation / AlphaGenome, and submit. If you just want to try it out, click the
+**example chips** under the paste box to drop a variant in (or **Load all** /
+**Clear**). The job runs in the background and a
 **progress page** shows the current step (e.g. "Annotating chr3:… (2/3)" or
 AlphaGenome progress); when it finishes the report opens automatically in the
 same tab. This keeps slow runs (especially AlphaGenome) from looking like a
