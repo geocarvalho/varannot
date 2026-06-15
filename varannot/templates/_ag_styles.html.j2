@@ -1,0 +1,61 @@
+<style>
+  /* AlphaGenome plot grid + controls (shared by the standalone and combined reports) */
+  .ag-controls {
+    position: sticky; top: 0; z-index: 5; background: var(--paper);
+    padding: 1rem 0 0.8rem; margin-bottom: 0.4rem;
+    display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+  }
+  .ag-controls label { font-weight: 600; font-size: 0.9rem; }
+  .ag-controls select {
+    font-family: var(--mono); font-size: 0.9rem; padding: 0.4rem 0.55rem;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink);
+    max-width: 100%;
+  }
+  .ag-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+    gap: 1rem; margin-top: 1rem;
+  }
+  .ag-plot {
+    margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); padding: 0.7rem; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(20,29,36,0.04);
+  }
+  .ag-plot figcaption {
+    font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem;
+  }
+  .ag-plot figcaption .ag-track {
+    color: var(--ink-soft); text-transform: none; letter-spacing: 0;
+  }
+  .ag-plot img { width: 100%; height: auto; display: block; cursor: zoom-in; }
+
+  /* click-to-zoom lightbox */
+  .ag-lightbox { position: fixed; inset: 0; background: rgba(15,18,22,0.93);
+    display: none; z-index: 50; }
+  .ag-lightbox.open { display: block; }
+  .ag-lb-stage { position: absolute; inset: 0; overflow: hidden; }
+  .ag-lb-img {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(1); transform-origin: center center;
+    max-width: none; max-height: none; user-select: none; -webkit-user-drag: none;
+    cursor: grab; will-change: transform;
+  }
+  .ag-lb-img.grabbing { cursor: grabbing; }
+  .ag-lb-bar {
+    position: absolute; top: 14px; right: 16px; z-index: 2;
+    display: flex; gap: 8px;
+  }
+  .ag-lb-btn {
+    font-family: var(--sans); font-size: 1rem; font-weight: 600; line-height: 1;
+    width: 38px; height: 38px; border-radius: 8px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
+  .ag-lb-btn:hover { background: rgba(255,255,255,0.22); }
+  .ag-lb-cap {
+    position: absolute; bottom: 16px; left: 0; right: 0; text-align: center;
+    color: #e8e8e8; font-family: var(--mono); font-size: 0.8rem;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6); pointer-events: none; padding: 0 1rem;
+  }
+</style>

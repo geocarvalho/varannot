@@ -1,0 +1,33 @@
+{# AlphaGenome plots body. Expects `alphagenome` in context. #}
+{% if alphagenome and alphagenome.variants %}
+  <div class="ag-controls">
+    <label for="ag-select">Variant:</label>
+    <select id="ag-select">
+      {% for av in alphagenome.variants %}
+      <option value="{{ av.id }}">{{ av.label }}{% if av.gene %} &middot; {{ av.gene }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% for av in alphagenome.variants %}
+  <div class="ag-variant" id="{{ av.id }}"{% if not loop.first %} style="display:none"{% endif %}>
+    {% if av.error %}<div class="err" style="margin:0.6rem 0">{{ av.error }}</div>{% endif %}
+    <div class="ag-grid">
+      {% for p in av.plots %}
+      <figure class="ag-plot">
+        <figcaption>{{ p.output|replace("_"," ") }}{% if p.track %} &middot; <span class="ag-track">{{ p.track }}</span>{% endif %}</figcaption>
+        {% if p.img %}
+          <img src="{{ p.img }}" alt="AlphaGenome {{ p.output }} prediction for {{ av.label }}" loading="lazy">
+        {% else %}
+          <div class="empty">No plot{% if p.error %} <span class="err">({{ p.error }})</span>{% endif %}</div>
+        {% endif %}
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty" style="margin-top:1.5rem">
+    No AlphaGenome results{% if alphagenome and alphagenome.error %} <span class="err">({{ alphagenome.error }})</span>{% endif %}.
+  </div>
+{% endif %}

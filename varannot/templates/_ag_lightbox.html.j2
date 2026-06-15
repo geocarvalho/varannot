@@ -1,0 +1,125 @@
+<div class="ag-lightbox" id="ag-lightbox" aria-hidden="true">
+  <div class="ag-lb-bar">
+    <button class="ag-lb-btn" data-act="out" title="Zoom out">&minus;</button>
+    <button class="ag-lb-btn" data-act="reset" title="Reset zoom">&#11034;</button>
+    <button class="ag-lb-btn" data-act="in" title="Zoom in">+</button>
+    <button class="ag-lb-btn" data-act="close" title="Close (Esc)">&times;</button>
+  </div>
+  <div class="ag-lb-stage" id="ag-lb-stage">
+    <img class="ag-lb-img" id="ag-lb-img" alt="">
+  </div>
+  <div class="ag-lb-cap" id="ag-lb-cap"></div>
+</div>
+
+<script>
+  (function () {
+    var sel = document.getElementById('ag-select');
+    if (sel) {
+      sel.addEventListener('change', function () {
+        document.querySelectorAll('.ag-variant').forEach(function (v) { v.style.display = 'none'; });
+        var cur = document.getElementById(sel.value);
+        if (cur) cur.style.display = '';
+      });
+    }
+
+    var box = document.getElementById('ag-lightbox');
+    if (!box) return;
+    var stage = document.getElementById('ag-lb-stage');
+    var img = document.getElementById('ag-lb-img');
+    var cap = document.getElementById('ag-lb-cap');
+    var scale = 1, tx = 0, ty = 0;
+    var MIN = 1, MAX = 12;
+    var dragging = false, moved = false, sx = 0, sy = 0;
+
+    function apply() {
+      img.style.transform =
+        'translate(calc(-50% + ' + tx + 'px), calc(-50% + ' + ty + 'px)) scale(' + scale + ')';
+    }
+    function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+
+    function open(src, caption) {
+      img.src = src;
+      cap.textContent = caption || '';
+      reset();
+      box.classList.add('open');
+      box.setAttribute('aria-hidden', 'false');
+    }
+    function close() {
+      box.classList.remove('open');
+      box.setAttribute('aria-hidden', 'true');
+      img.src = '';
+    }
+
+    function zoomAt(factor, cx, cy) {
+      var next = Math.min(MAX, Math.max(MIN, scale * factor));
+      if (next === scale) return;
+      var rect = stage.getBoundingClientRect();
+      var ox = (cx - rect.left - rect.width / 2 - tx);
+      var oy = (cy - rect.top - rect.height / 2 - ty);
+      var ratio = next / scale;
+      tx -= ox * (ratio - 1);
+      ty -= oy * (ratio - 1);
+      scale = next;
+      if (scale === MIN) { tx = 0; ty = 0; }
+      apply();
+    }
+
+    document.querySelectorAll('.ag-plot img').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var fig = el.closest('.ag-plot');
+        var fc = fig ? fig.querySelector('figcaption') : null;
+        open(el.src, fc ? fc.textContent.trim() : el.alt);
+      });
+    });
+
+    box.querySelector('.ag-lb-bar').addEventListener('click', function (e) {
+      var btn = e.target.closest('.ag-lb-btn');
+      if (!btn) return;
+      var r = stage.getBoundingClientRect();
+      var act = btn.dataset.act;
+      if (act === 'in') zoomAt(1.4, r.left + r.width / 2, r.top + r.height / 2);
+      else if (act === 'out') zoomAt(1 / 1.4, r.left + r.width / 2, r.top + r.height / 2);
+      else if (act === 'reset') reset();
+      else if (act === 'close') close();
+    });
+
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
+    }, { passive: false });
+
+    img.addEventListener('mousedown', function (e) {
+      dragging = true; moved = false; sx = e.clientX; sy = e.clientY;
+      img.classList.add('grabbing'); e.preventDefault();
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      tx += dx; ty += dy; sx = e.clientX; sy = e.clientY; apply();
+    });
+    window.addEventListener('mouseup', function () {
+      dragging = false; img.classList.remove('grabbing');
+    });
+    img.addEventListener('click', function (e) {
+      if (moved) return;
+      if (scale > 1) reset();
+      else zoomAt(2.5, e.clientX, e.clientY);
+    });
+    stage.addEventListener('click', function (e) {
+      if (e.target === stage) close();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (!box.classList.contains('open')) return;
+      if (e.key === 'Escape') close();
+      else if (e.key === '+' || e.key === '=') {
+        var r = stage.getBoundingClientRect();
+        zoomAt(1.4, r.left + r.width / 2, r.top + r.height / 2);
+      } else if (e.key === '-') {
+        var r2 = stage.getBoundingClientRect();
+        zoomAt(1 / 1.4, r2.left + r2.width / 2, r2.top + r2.height / 2);
+      } else if (e.key === '0') reset();
+    });
+  })();
+</script>
