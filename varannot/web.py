@@ -35,6 +35,7 @@ from flask import (Flask, Response, jsonify, redirect, render_template,
 from . import annotate
 from .http_client import CachedSession
 from .sources import alphagenome as ag_src
+from .sources import autoacmg as autoacmg_src
 from .sources import conservation as cons_src
 from .sources import omim as omim_src
 
@@ -108,6 +109,7 @@ def _form_context(**extra):
         "max_variants": MAX_VARIANTS,
         "example": EXAMPLE,
         "examples": [ln for ln in EXAMPLE.splitlines() if ln.strip()],
+        "autoacmg_default_url": autoacmg_src.DEFAULT_URL,
         "error": None,
         "variants_text": "",
     }
@@ -145,9 +147,13 @@ def report():
     except ValueError:
         top_n = ag_src.DEFAULT_TOP_TRACKS
 
+    autoacmg_url = (request.form.get("autoacmg_url") or "").strip() or None
+
     opts = {
         "spliceai": request.form.get("spliceai") == "on",
         "cons46": request.form.get("conservation46") == "on",
+        "autoacmg": request.form.get("autoacmg") == "on",
+        "autoacmg_url": autoacmg_url,
         "run_ag": request.form.get("run_alphagenome") == "on" and bool(ag_key),
         "ag_key": ag_key,
         "outputs": _split_csv(request.form.get("alphagenome_outputs")),
@@ -199,6 +205,8 @@ def _run_job(job_id, variants, opts):
                     spliceai_enabled=opts["spliceai"],
                     cons46_enabled=opts["cons46"], exonaa_path=exonaa_path,
                     omim_index=omim_index,
+                    autoacmg_enabled=opts["autoacmg"],
+                    autoacmg_url=opts["autoacmg_url"],
                 ))
             except Exception as exc:  # keep going on per-variant failures
                 records.append(annotate._error_record(

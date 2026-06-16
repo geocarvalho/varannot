@@ -136,6 +136,18 @@
         </span>
       </label>
       <label class="check">
+        <input type="checkbox" name="autoacmg" id="autoacmg">
+        <span>AutoACMG ACMG/AMP classification
+          <span class="desc">Needs your own AutoACMG instance (no public server). Set its URL below.</span>
+        </span>
+      </label>
+      <div class="row" id="autoacmg-url-row" style="margin-top:0.4rem; margin-left:1.8rem; display:none">
+        <label class="field" for="autoacmg_url">AutoACMG base URL</label>
+        <input type="text" id="autoacmg_url" name="autoacmg_url"
+               value="{{ autoacmg_default_url }}"
+               placeholder="http://localhost:8080">
+      </div>
+      <label class="check">
         <input type="checkbox" name="run_alphagenome"{% if not ag_installed %} disabled{% endif %}>
         <span>AlphaGenome predictions (adds a second tab)
           <span class="desc">
@@ -220,6 +232,15 @@
     });
     var clear = document.getElementById('ex-clear');
     if (clear) clear.addEventListener('click', function () { ta.value = ''; ta.focus(); });
+  })();
+
+  (function () {
+    var cb = document.getElementById('autoacmg');
+    var row = document.getElementById('autoacmg-url-row');
+    if (!cb || !row) return;
+    function sync() { row.style.display = cb.checked ? 'block' : 'none'; }
+    cb.addEventListener('change', sync);
+    sync();
   })();
 </script>
 </body>

@@ -30,6 +30,10 @@ Each variant gets:
 - **GTEx**: median gene expression (TPM) across the top tissues, always
   including muscle, fibroblast, and whole blood
 - **OMIM**: gene MIM number and associated phenotypes with inheritance
+- **AutoACMG** (optional): ACMG/AMP criteria (PVS1 … BP7) from a **self-hosted**
+  [AutoACMG](https://github.com/bihealth/auto-acmg) instance, combined into an
+  overall classification (Pathogenic / Likely pathogenic / VUS / Likely benign /
+  Benign) — see [AutoACMG classification](#autoacmg-classification)
 
 **AlphaGenome** (Google DeepMind) variant-effect plots are available either as a
 **separate report** (its own command) or folded into the main report as a second
@@ -72,6 +76,7 @@ pip install alphagenome matplotlib
 | OMIM          | local genemap2.txt (download files)   | No (or licensed key)   |
 | Conservation  | UCSC multiz46way exonAA + VEP          | No (355 MB download)   |
 | AlphaGenome   | AlphaGenome API (DeepMind)             | Yes (API key)          |
+| AutoACMG      | your own AutoACMG instance             | No public server (self-host) |
 
 OMIM offers two kinds of access — **download files** or an **API key** — and they
 are granted separately. This tool prefers the **download files**: if you have
@@ -102,9 +107,11 @@ python -m varannot.web --port 8080 --host 0.0.0.0
 > Receiver off in System Settings → General → AirDrop & Handoff.)
 
 Paste one variant per line (`chr,pos,ref,alt`), optionally tick SpliceAI /
-conservation / AlphaGenome, and submit. If you just want to try it out, click the
-**example chips** under the paste box to drop a variant in (or **Load all** /
-**Clear**). The job runs in the background and a
+conservation / AutoACMG / AlphaGenome, and submit. If you just want to try it
+out, click the **example chips** under the paste box to drop a variant in (or
+**Load all** / **Clear**). Ticking **AutoACMG** reveals a base-URL field for your
+self-hosted instance (see [AutoACMG classification](#autoacmg-classification)).
+The job runs in the background and a
 **progress page** shows the current step (e.g. "Annotating chr3:… (2/3)" or
 AlphaGenome progress); when it finishes the report opens automatically in the
 same tab. This keeps slow runs (especially AlphaGenome) from looking like a
@@ -167,6 +174,8 @@ Open `report.html` in any browser.
 | `--spliceai-url` | (Broad endpoint)   | Custom SpliceAI API base URL (own instance)  |
 | `--conservation46`| off               | Enable the UCSC 46-way amino-acid track      |
 | `--exonaa-dir`   | `.varannot_cache`  | Where the UCSC exonAA file is downloaded      |
+| `--autoacmg`     | off                | Add ACMG/AMP classification from a self-hosted AutoACMG |
+| `--autoacmg-url` | `http://localhost:8080` | Base URL of your AutoACMG instance (or `$AUTOACMG_URL`) |
 | `--max-variants` | 50                 | Safety cap on batch size                     |
 
 ### SpliceAI notes
@@ -272,6 +281,39 @@ each output, and labels the plot with that track's name. Raise
 `--alphagenome-top-tracks` to show more (e.g. `--alphagenome-top-tracks 5`), or
 restrict tissues explicitly with `--alphagenome-ontology`.
 
+## AutoACMG classification
+
+[AutoACMG](https://github.com/bihealth/auto-acmg) (BIH CUBI) automatically
+evaluates the ACMG/AMP criteria (PVS1, PS1 … BP7) for a variant. There is **no
+public AutoACMG server**, so this integration talks to **your own** instance.
+
+1. **Run AutoACMG yourself** (Docker; needs SeqRepo + a REEV proxy). Follow the
+   [AutoACMG docs](https://auto-acmg.readthedocs.io/en/latest/usage.html). Once
+   it's up, its API answers at e.g.
+   `http://localhost:8080/api/v1/predict/seqvar?variant_name=chr1:228282272:G:A`.
+2. **Point varannot at it** with `--autoacmg` (and `--autoacmg-url` if it isn't
+   on `http://localhost:8080`, or set `$AUTOACMG_URL`):
+
+```bash
+python -m varannot.annotate --input test/example_variants.csv --output report.html \
+    --omim-genemap2 genemap2.txt \
+    --autoacmg --autoacmg-url http://localhost:8080
+```
+
+The report gains an **AutoACMG** panel per variant listing each applicable
+criterion with its strength, plus a header badge (P / LP / VUS / LB / B).
+
+> **How the overall call is made.** AutoACMG returns *per-criterion* predictions,
+> not a single verdict. varannot collects the criteria it marks **applicable**
+> and combines them into one classification using the ACMG/AMP combining rules
+> (Richards et al., 2015), using each criterion's *returned strength* (so a
+> downgraded PVS1 is counted at its adjusted weight). It's a convenience summary
+> and **always requires expert review** — criteria AutoACMG can't automate
+> (e.g. PS3/PP1 functional/segregation evidence) are not included.
+
+If the instance is unreachable, the section simply shows a note; nothing else in
+the report is affected.
+
 ## Project layout
 
 ```
@@ -291,6 +333,7 @@ varannot/
 │   ├── spliceai.py        # SpliceAI delta scores (Broad lookup API)
 │   ├── gtex.py            # GTEx v8 median gene expression
 │   ├── conservation.py    # UCSC multiz species match track
+│   ├── autoacmg.py        # ACMG/AMP criteria via a self-hosted AutoACMG
 │   └── alphagenome.py     # AlphaGenome predictions + matplotlib plots
 └── templates/
     ├── report.html.j2              # main report (gains tabs when combined)

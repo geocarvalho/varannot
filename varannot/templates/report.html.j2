@@ -108,6 +108,32 @@
   .empty { color: var(--gap); font-style: italic; font-size: 0.85rem; }
   .err { color: var(--warn); font-size: 0.8rem; font-family: var(--mono); }
 
+  /* AutoACMG classification */
+  .acmg-verdict {
+    display: inline-block; font-weight: 650; font-size: 0.95rem;
+    padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid var(--line);
+    color: var(--ink-soft);
+  }
+  .acmg-verdict.path { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+  .acmg-verdict.benign { color: var(--good); border-color: var(--good); }
+  .acmg-crit { list-style: none; padding: 0; margin: 0.55rem 0 0; }
+  .acmg-crit li {
+    display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.85rem;
+    padding: 0.18rem 0; border-top: 1px dashed var(--line);
+  }
+  .acmg-crit li:first-child { border-top: none; }
+  .acmg-crit .name {
+    font-family: var(--mono); font-weight: 650; min-width: 3.4rem;
+  }
+  .acmg-crit li.p .name { color: var(--warn); }
+  .acmg-crit li.b .name { color: var(--good); }
+  .acmg-crit .str {
+    font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px;
+    padding: 0.02rem 0.36rem; white-space: nowrap; align-self: center;
+  }
+  .acmg-crit .sum { color: var(--ink-soft); }
+
   .gene-model { padding: 0.4rem 0 0.1rem; }
   .gene-model svg { display: block; max-width: 100%; }
   .gene-model .cap {
@@ -209,6 +235,11 @@
         {% set sig = v.clinvar.clinical_significance|lower %}
         <span class="badge {{ 'path' if 'pathogenic' in sig and 'benign' not in sig else ('benign' if 'benign' in sig else '') }}">
           ClinVar: {{ v.clinvar.clinical_significance }}
+        </span>
+      {% endif %}
+      {% if v.autoacmg and v.autoacmg.found and v.autoacmg.classification %}
+        <span class="badge {{ 'path' if v.autoacmg.abbrev in ['P','LP'] else ('benign' if v.autoacmg.abbrev in ['B','LB'] else '') }}">
+          AutoACMG: {{ v.autoacmg.abbrev }}
         </span>
       {% endif %}
     </div>
@@ -386,6 +417,38 @@
           {% if v.clinvar.url %}<div class="kv" style="margin-top:0.4rem"><span class="k"></span><span class="v"><a href="{{ v.clinvar.url }}" target="_blank">View in ClinVar &rarr;</a></span></div>{% endif %}
         {% else %}
           <div class="empty">Not found in ClinVar{% if v.clinvar.error %} <span class="err">({{ v.clinvar.error }})</span>{% endif %}</div>
+        {% endif %}
+      </div>
+
+      <!-- AutoACMG classification -->
+      <div class="cell" style="grid-column: 1 / -1; border-right:none;">
+        <h3>AutoACMG &middot; ACMG/AMP classification</h3>
+        {% if not v.autoacmg or not v.autoacmg.enabled %}
+          <div class="empty">Not run (enable with --autoacmg and a self-hosted AutoACMG instance)</div>
+        {% elif v.autoacmg.found %}
+          <div class="kv" style="align-items:center">
+            <span class="k">Classification</span>
+            <span class="v">
+              <span class="acmg-verdict {{ 'path' if v.autoacmg.abbrev in ['P','LP'] else ('benign' if v.autoacmg.abbrev in ['B','LB'] else '') }}">{{ v.autoacmg.classification }}</span>
+            </span>
+          </div>
+          {% if v.autoacmg.criteria %}
+            <ul class="acmg-crit">
+              {% for c in v.autoacmg.criteria %}
+              <li class="{{ 'b' if c.bucket in ['BA','BS','BP'] else 'p' }}">
+                <span class="name">{{ c.name }}</span>
+                {% if c.strength_label %}<span class="str">{{ c.strength_label }}</span>{% endif %}
+                {% if c.summary %}<span class="sum">{{ c.summary }}</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="empty" style="margin-top:0.4rem">No criteria met &middot; defaults to uncertain significance</div>
+          {% endif %}
+          <div class="track-legend">Combined from AutoACMG's per-criterion calls using ACMG/AMP rules (Richards et&nbsp;al. 2015); review required.</div>
+          {% if v.autoacmg.url %}<div class="kv" style="margin-top:0.4rem"><span class="k"></span><span class="v"><a href="{{ v.autoacmg.url }}" target="_blank">View AutoACMG prediction &rarr;</a></span></div>{% endif %}
+        {% else %}
+          <div class="empty">AutoACMG prediction unavailable{% if v.autoacmg.error %} <span class="err">({{ v.autoacmg.error }})</span>{% endif %}</div>
         {% endif %}
       </div>
 

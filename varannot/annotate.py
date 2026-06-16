@@ -39,6 +39,7 @@ from .sources import revel as revel_src
 from .sources import gene_model as gene_model_src
 from .sources import protein_domains as protein_src
 from .sources import gtex as gtex_src
+from .sources import autoacmg as autoacmg_src
 from .sources import alphagenome as alphagenome_src
 
 
@@ -85,7 +86,7 @@ def parse_variants_text(text):
 def annotate_one(client, var, omim_key, ncbi_key=None,
                  spliceai_enabled=False, spliceai_url=None,
                  cons46_enabled=False, exonaa_path=None, liftover=None,
-                 omim_index=None):
+                 omim_index=None, autoacmg_enabled=False, autoacmg_url=None):
     """Run all sources for a single variant and return a merged record."""
     chrom, pos, ref, alt = var["chrom"], var["pos"], var["ref"], var["alt"]
     print(f"  {chrom}:{pos} {ref}>{alt} ...", end="", flush=True)
@@ -127,6 +128,10 @@ def annotate_one(client, var, omim_key, ncbi_key=None,
     protein_diagram = protein_src.build_protein_diagram(client, vep)
     gtex = gtex_src.query_gtex(client, gene, gene_id=vep.get("gene_id"))
 
+    autoacmg = autoacmg_src.query_autoacmg(
+        client, chrom, pos, ref, alt,
+        base_url=autoacmg_url, enabled=autoacmg_enabled)
+
     print(" done")
     return {
         "input": var,
@@ -142,6 +147,7 @@ def annotate_one(client, var, omim_key, ncbi_key=None,
         "gene_model": gene_model,
         "protein_diagram": protein_diagram,
         "gtex": gtex,
+        "autoacmg": autoacmg,
     }
 
 
@@ -170,6 +176,10 @@ def _error_record(var, exc, spliceai_enabled=False):
                             "error": msg, "domains": [], "length": None},
         "gtex": {"found": False, "tissues": [], "max_median": 0.0,
                  "error": msg, "url": ""},
+        "autoacmg": {"enabled": False, "found": False, "error": msg,
+                     "url": "", "criteria": [], "classification": "",
+                     "abbrev": "", "gene_symbol": "", "phgvs": "",
+                     "transcript_id": ""},
     }
 
 
@@ -228,6 +238,15 @@ def main():
                         help="Where to store/find the downloaded 46-way exonAA file")
     parser.add_argument("--max-variants", type=int, default=50,
                         help="Safety cap on number of variants (default 50)")
+    parser.add_argument("--autoacmg", action="store_true",
+                        help="Add ACMG/AMP classification from a self-hosted "
+                             "AutoACMG instance (bihealth/auto-acmg). No public "
+                             "server exists; you must run your own.")
+    parser.add_argument("--autoacmg-url",
+                        default=os.environ.get("AUTOACMG_URL",
+                                               autoacmg_src.DEFAULT_URL),
+                        help="Base URL of your AutoACMG instance "
+                             "(default http://localhost:8080; or set AUTOACMG_URL)")
     parser.add_argument("--alphagenome-key",
                         default=os.environ.get("ALPHAGENOME_API_KEY"),
                         help="AlphaGenome API key. When given, the report gains a "
@@ -277,6 +296,11 @@ def main():
               f"about {len(variants) * 6 // 60 + 1} min.")
         print("      For speed, run your own instance and pass --spliceai-url.\n")
 
+    if args.autoacmg:
+        print(f"NOTE: AutoACMG classification enabled (querying {args.autoacmg_url}).")
+        print("      This requires your own running AutoACMG instance; if it is")
+        print("      unreachable the ACMG section just shows a note.\n")
+
     print(f"Annotating {len(variants)} variant(s)...")
     client = CachedSession(cache_dir=args.cache_dir, min_interval=args.min_interval)
 
@@ -304,6 +328,7 @@ def main():
                 cons46_enabled=args.conservation46,
                 exonaa_path=exonaa_path, liftover=liftover,
                 omim_index=omim_index,
+                autoacmg_enabled=args.autoacmg, autoacmg_url=args.autoacmg_url,
             ))
         except Exception as exc:  # keep going on per-variant failures
             print(f" ERROR: {exc}")
